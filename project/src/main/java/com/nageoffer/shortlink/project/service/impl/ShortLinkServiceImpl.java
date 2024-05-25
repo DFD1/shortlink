@@ -335,10 +335,15 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         if (!Objects.equals(hasShortLinkDO.getValidDateType(), requestParam.getValidDateType())
                 || !Objects.equals(hasShortLinkDO.getValidDate(), requestParam.getValidDate())
                 || !Objects.equals(hasShortLinkDO.getOriginUrl(), requestParam.getOriginUrl())) {
+            /*在测试过程中发现一旦修改永久的短链接的时间为失效状态。短链接还可以正常访问，这是因为缓存中的GOTO_SHORT_LINK_KEY没有被删除，短链接跳转时查的还是缓存
+             所以我们修改代码为一旦发现原来短链接的日期类型（类型分为永久和自定义）更改 或者 有效期时间更改 或者 原始链接更改，就删除缓存*/
             stringRedisTemplate.delete(String.format(GOTO_SHORT_LINK_KEY, requestParam.getFullShortUrl()));
             Date currentDate = new Date();
             if (hasShortLinkDO.getValidDate() != null && hasShortLinkDO.getValidDate().before(currentDate)) {
                 if (Objects.equals(requestParam.getValidDateType(), VailDateTypeEnum.PERMANENT.getType()) || requestParam.getValidDate().after(currentDate)) {
+                    // 测试过程中发现虽然修改短链接为失效状态后，短链接无法正常跳转了。但是如果此时我们把短链接的时间改为永久，
+                    // 也就是说给短链接恢复后，短链接是依然无法正常跳转，这是因为缓存里面的GOTO_IS_NULL_SHORT_LINK_KEY 没有被删除。
+                    // 所以我们一旦发现原来的短链接是过期状态，并且此时我们前端传来的请求参数中，短链接的时间状态为永久或者时间改为了有效状态，我们就把缓存中的GOTO_IS_NULL_SHORT_LINK_KEY删除
                     stringRedisTemplate.delete(String.format(GOTO_IS_NULL_SHORT_LINK_KEY, requestParam.getFullShortUrl()));
                 }
             }
